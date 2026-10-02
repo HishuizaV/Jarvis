@@ -44,3 +44,14 @@ def test_list_models_devuelve_los_nombres():
         lambda request: httpx.Response(200, json={"models": [{"name": "llama3.2:3b"}]})
     )
     assert client.list_models() == ["llama3.2:3b"]
+
+def test_chat_envia_la_temperatura_cuando_se_indica():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(200, json={"message": {"role": "assistant", "content": "ok"}})
+
+    make_client(handler).chat([{"role": "user", "content": "hi"}], temperature=0.0)
+
+    assert seen["payload"]["options"]["temperature"] == 0.0

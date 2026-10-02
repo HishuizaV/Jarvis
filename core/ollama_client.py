@@ -54,18 +54,23 @@ class OllamaClient:
         messages: list[Message],
         tools: list[dict[str, Any]] | None = None,
         json_mode: bool = False,
+        temperature: float | None = None,
     ) -> Message:
         """Envía la conversación y devuelve el mensaje del asistente.
 
         El mensaje devuelto trae 'content' y, si el modelo pidió una
         herramienta, también 'tool_calls'.
         """
+        options: dict[str, Any] = {"num_ctx": settings.num_ctx}
+        if temperature is not None:
+            options["temperature"] = temperature
+
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "stream": False,
             "keep_alive": settings.keep_alive,
-            "options": {"num_ctx": settings.num_ctx},
+            "options": options,
         }
         if tools:
             payload["tools"] = tools
