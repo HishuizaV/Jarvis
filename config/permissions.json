@@ -1,1 +1,30 @@
-{}
+{
+  "tool_overrides": {},
+  "protected_paths": [
+    "C:\\Windows",
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "C:\\ProgramData"
+  ],
+  "protected_processes": [
+    "explorer", "winlogon", "csrss", "lsass", "services", "svchost",
+    "smss", "wininit", "system", "dwm", "python", "pythonw", "ollama"
+  ],
+  "blocked_command_patterns": [
+    "\\bformat\\s+[a-z]:",
+    "\\bFormat-Volume\\b",
+    "\\bClear-Disk\\b",
+    "\\bRemove-Partition\\b",
+    "\\bdiskpart\\b",
+    "\\bbcdedit\\b"
+  ],
+  "confirm_command_patterns": [
+    "\\bRemove-Item\\b", "\\bdel\\b", "\\berase\\b", "\\brmdir\\b", "\\brd\\b",
+    "\\bMove-Item\\b", "\\bSet-Content\\b", "\\bOut-File\\b",
+    "\\bStop-Process\\b", "\\btaskkill\\b",
+    "\\bStop-Computer\\b", "\\bRestart-Computer\\b", "\\bshutdown\\b",
+    "\\bwinget\\s+(install|uninstall|upgrade)\\b", "\\bInstall-Module\\b", "\\bUninstall-",
+    "\\breg\\s+(add|delete|import)\\b", "\\bSet-ItemProperty\\b", "\\bSet-ExecutionPolicy\\b",
+    "\\bInvoke-Expression\\b", "\\biex\\b", "RunAs"
+  ]
+}
