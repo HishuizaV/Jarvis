@@ -87,6 +87,8 @@ def test_route_envia_prompt_historial_temperatura_y_herramientas(reg):
         ("Hola, ¿cómo estás?", False),
         ("¿Cuál es la capital de Francia?", False),
         ("Explícame qué es una variable en Python", False),
+        ("Bloquea la pantalla", True),
+        ("¿Qué sistema operativo tengo?", True),
     ],
 )
 def test_needs_tools(texto, esperado):

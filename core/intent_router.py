@@ -28,10 +28,10 @@ TOOL_KEYWORDS = (
     "encuentra", "mueve", "mover", "copia", "copiar", "renombra", "renombrar",
     "ejecuta", "ejecutar", "elimina", "eliminar", "borra", "borrar",
     "apaga", "apagar", "reinicia", "reiniciar", "recuerdame", "recordatorio",
-    "avisame", "captura",
+    "avisame", "captura", "bloquea", "bloquear",
     # consultas del sistema
     "ram", "cpu", "gpu", "bateria", "memoria", "procesador", "procesos",
-    "hora", "fecha", "volumen", "disco", "consumiendo",
+    "hora", "fecha", "volumen", "disco", "consumiendo", "sistema",
 )
 _TOOL_PATTERN = re.compile(r"\b(?:" + "|".join(TOOL_KEYWORDS) + r")\b")
 
