@@ -1,7 +1,7 @@
 """Herramientas de JARVIS. Importar este paquete no registra nada: usa load_tools()."""
 import importlib
 
-TOOL_MODULES = ("tools.system",)
+TOOL_MODULES = ("tools.system", "tools.apps")
 
 
 def load_tools() -> None:

@@ -61,7 +61,7 @@ def test_herramienta_inexistente_se_rechaza(reg):
     assert intent.reply
 
 
-def test_route_envia_prompt_historial_temperatura_y_herramientas(reg):
+def test_route_con_herramientas_no_envia_historial(reg):
     client = FakeClient({"role": "assistant", "content": "ok"})
     history = [
         {"role": "user", "content": "antes"},
@@ -70,11 +70,26 @@ def test_route_envia_prompt_historial_temperatura_y_herramientas(reg):
     IntentRouter(client, reg).route("crea una carpeta", history=history)
 
     call = client.calls[0]
-    assert call["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
-    assert call["messages"][1:3] == history
-    assert call["messages"][-1] == {"role": "user", "content": "crea una carpeta"}
+    assert call["messages"] == [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": "crea una carpeta"},
+    ]
     assert call["temperature"] == 0.0
     assert call["tools"][0]["function"]["name"] == "create_folder"
+
+
+def test_route_de_conversacion_si_envia_historial_y_ninguna_herramienta(reg):
+    client = FakeClient({"role": "assistant", "content": "ok"})
+    history = [
+        {"role": "user", "content": "antes"},
+        {"role": "assistant", "content": "respuesta"},
+    ]
+    IntentRouter(client, reg).route("ahora", history=history)
+
+    call = client.calls[0]
+    assert call["messages"][1:3] == history
+    assert call["messages"][-1] == {"role": "user", "content": "ahora"}
+    assert call["tools"] is None
 
 @pytest.mark.parametrize(
     ("texto", "esperado"),
@@ -89,6 +104,7 @@ def test_route_envia_prompt_historial_temperatura_y_herramientas(reg):
         ("Explícame qué es una variable en Python", False),
         ("Bloquea la pantalla", True),
         ("¿Qué sistema operativo tengo?", True),
+        ("¿Está Spotify abierto?", True),
     ],
 )
 def test_needs_tools(texto, esperado):

@@ -1,0 +1,50 @@
+{
+  "spotify": {
+    "aliases": ["spotify"],
+    "launch": "spotify:",
+    "process": "Spotify.exe"
+  },
+  "chrome": {
+    "aliases": ["chrome", "google chrome"],
+    "launch": "chrome",
+    "process": "chrome.exe"
+  },
+  "edge": {
+    "aliases": ["edge", "microsoft edge"],
+    "launch": "msedge",
+    "process": "msedge.exe"
+  },
+  "vscode": {
+    "aliases": ["vscode", "vs code", "visual studio code", "code"],
+    "launch": "code",
+    "process": "Code.exe"
+  },
+  "bloc de notas": {
+    "aliases": ["notepad", "bloc de notas"],
+    "launch": "notepad",
+    "process": "notepad.exe"
+  },
+  "calculadora": {
+    "aliases": ["calculadora", "calculator", "calc"],
+    "launch": "calc",
+    "process": "CalculatorApp.exe",
+    "force_close": true
+  },
+  "whatsapp": {
+    "aliases": ["whatsapp"],
+    "launch": "whatsapp:",
+    "process": "WhatsApp.Root.exe"
+  },
+  "terminal": {
+    "aliases": ["terminal", "windows terminal", "powershell"],
+    "launch": "wt",
+    "process": "WindowsTerminal.exe",
+    "can_close": false
+  },
+  "cmd": {
+    "aliases": ["cmd", "símbolo del sistema", "simbolo del sistema", "consola"],
+    "launch": "cmd",
+    "process": "cmd.exe",
+    "can_close": false
+  }
+}   

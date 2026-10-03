@@ -28,7 +28,7 @@ TOOL_KEYWORDS = (
     "encuentra", "mueve", "mover", "copia", "copiar", "renombra", "renombrar",
     "ejecuta", "ejecutar", "elimina", "eliminar", "borra", "borrar",
     "apaga", "apagar", "reinicia", "reiniciar", "recuerdame", "recordatorio",
-    "avisame", "captura", "bloquea", "bloquear",
+    "avisame", "captura", "bloquea", "bloquear", "abierto", "abierta", "ejecutando",
     # consultas del sistema
     "ram", "cpu", "gpu", "bateria", "memoria", "procesador", "procesos",
     "hora", "fecha", "volumen", "disco", "consumiendo", "sistema",
@@ -78,13 +78,17 @@ class IntentRouter:
 
     def route(self, user_text: str, history: list[Message] | None = None) -> Intent:
         """Interpreta el mensaje del usuario. Puede lanzar OllamaError."""
+        use_tools = needs_tools(user_text)
+
+        # Al pedir herramientas no se envía el historial: un modelo de 3B arrastra
+        # errores de turnos anteriores (por ejemplo, repite un argumento viejo).
+        context = [] if use_tools else (history or [])
         messages: list[Message] = [
             {"role": "system", "content": self._system_prompt},
-            *(history or []),
+            *context,
             {"role": "user", "content": user_text},
         ]
 
-        use_tools = needs_tools(user_text)
         tools = self._registry.to_ollama_tools() if use_tools else []
         message = self._client.chat(messages, tools=tools or None, temperature=0.0)
 
