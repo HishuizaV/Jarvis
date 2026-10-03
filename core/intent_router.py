@@ -36,7 +36,7 @@ TOOL_KEYWORDS = (
 _TOOL_PATTERN = re.compile(r"\b(?:" + "|".join(TOOL_KEYWORDS) + r")\b")
 
 
-def _normalize(text: str) -> str:
+def normalize_text(text: str) -> str:
     """Minúsculas y sin tildes: 'Batería' -> 'bateria'."""
     decomposed = unicodedata.normalize("NFD", text.lower())
     return "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
@@ -44,7 +44,7 @@ def _normalize(text: str) -> str:
 
 def needs_tools(text: str) -> bool:
     """Compuerta en código: ¿vale la pena ofrecerle herramientas al modelo?"""
-    return _TOOL_PATTERN.search(_normalize(text)) is not None
+    return _TOOL_PATTERN.search(normalize_text(text)) is not None
 
 
 @dataclass(frozen=True)
