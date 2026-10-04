@@ -1,7 +1,8 @@
 """Control de aplicaciones: abrir, cerrar y consultar si están en ejecución.
 
-Solo se manejan las apps del catálogo config/apps.json (lista blanca): el modelo
-nunca puede pasar un ejecutable o una ruta arbitraria.
+Abrir: primero el catálogo config/apps.json y, si la app no está, las apps
+instaladas en Windows (Menú Inicio). Cerrar y consultar: solo el catálogo
+(lista blanca), porque necesitan el nombre exacto del proceso.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import psutil
 
 from config.settings import BASE_DIR
 from core.tool_registry import RiskLevel, ToolParameter, registry
+from services.installed_apps import InstalledApps
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +106,17 @@ def get_catalog() -> AppCatalog:
     return AppCatalog.from_file(APPS_FILE)
 
 
+@lru_cache(maxsize=1)
+def get_index() -> InstalledApps:
+    """Índice de apps instaladas (se crea una sola vez)."""
+    return InstalledApps()
+
+
 def _unknown(app: str) -> str:
-    return f"No conozco la aplicación '{app}'. Puedo manejar: {', '.join(get_catalog().names())}."
+    return (
+        f"No tengo registrada la aplicación '{app}' para esa acción. "
+        f"Registradas: {', '.join(get_catalog().names())}."
+    )
 
 
 def _is_process_running(process_name: str) -> bool:
@@ -115,30 +126,52 @@ def _is_process_running(process_name: str) -> bool:
     )
 
 
+def _launch(name: str, target: str, hint: str = "") -> str:
+    try:
+        os.startfile(target)  # solo existe en Windows
+    except OSError as exc:
+        logger.warning("No se pudo abrir %s (%s): %s", name, target, exc)
+        return f"No pude abrir {name}: {exc}.{hint}"
+    return f"Abriendo {name}."
+
+
+def _open_installed(app: str) -> str:
+    """Busca la app entre las instaladas en Windows y la abre si hay una coincidencia clara."""
+    result = get_index().search(app)
+
+    if result.kind == "match":
+        found = result.apps[0]
+        return _launch(found.name, found.launch_target)
+    if result.kind == "ambiguous":
+        options = ", ".join(found.name for found in result.apps)
+        return f"Encontré varias aplicaciones para '{app}': {options}. Dime cuál quieres abrir."
+    if result.kind == "suggestion":
+        options = ", ".join(found.name for found in result.apps)
+        return f"No encontré '{app}'. ¿Quisiste decir: {options}? Dime «abre» seguido del nombre exacto."
+    if result.kind == "unavailable":
+        return "No pude consultar la lista de aplicaciones instaladas de Windows."
+    return f"No encontré ninguna aplicación instalada llamada '{app}'."
+
+
 @registry.register(
     name="open_app",
-    description="Abre una aplicación por su nombre. Ejemplos: spotify, chrome, vscode, whatsapp, calculadora, bloc de notas.",
+    description=(
+        "Abre una aplicación instalada por su nombre. "
+        "Ejemplos: spotify, chrome, vscode, whatsapp, calculadora, word, photoshop."
+    ),
     risk=RiskLevel.SAFE,
     parameters=[ToolParameter("app", "string", "Nombre de la aplicación")],
 )
 def open_app(app: str) -> str:
     entry = get_catalog().find(app)
-    if entry is None:
-        return _unknown(app)
-    try:
-        os.startfile(entry.launch)  # solo existe en Windows
-    except OSError as exc:
-        logger.warning("No se pudo abrir %s (%s): %s", entry.name, entry.launch, exc)
-        return (
-            f"No pude abrir {entry.name}: {exc}. "
-            f"Revisa su entrada en config/apps.json."
-        )
-    return f"Abriendo {entry.name}."
+    if entry is not None:
+        return _launch(entry.name, entry.launch, " Revisa su entrada en config/apps.json.")
+    return _open_installed(app)
 
 
 @registry.register(
     name="close_app",
-    description="Cierra una aplicación por su nombre. Ejemplos: spotify, chrome, vscode, calculadora.",
+    description="Cierra una aplicación registrada por su nombre. Ejemplos: spotify, chrome, vscode, calculadora.",
     risk=RiskLevel.SAFE,
     parameters=[ToolParameter("app", "string", "Nombre de la aplicación")],
 )
@@ -164,7 +197,7 @@ def close_app(app: str) -> str:
 
 @registry.register(
     name="is_app_running",
-    description="Indica si una aplicación está abierta (en ejecución).",
+    description="Indica si una aplicación registrada está abierta (en ejecución).",
     risk=RiskLevel.SAFE,
     parameters=[ToolParameter("app", "string", "Nombre de la aplicación")],
 )

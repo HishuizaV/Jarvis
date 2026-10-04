@@ -36,9 +36,15 @@
     "process": "WhatsApp.Root.exe"
   },
   "terminal": {
-    "aliases": ["terminal", "windows terminal", "powershell"],
+    "aliases": ["terminal", "windows terminal"],
     "launch": "wt",
     "process": "WindowsTerminal.exe",
+    "can_close": false
+  },
+  "powershell": {
+    "aliases": ["powershell", "power shell", "windows powershell"],
+    "launch": "powershell",
+    "process": "powershell.exe",
     "can_close": false
   },
   "cmd": {
@@ -47,4 +53,4 @@
     "process": "cmd.exe",
     "can_close": false
   }
-}   
+}
