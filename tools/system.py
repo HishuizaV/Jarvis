@@ -8,19 +8,10 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from core.paths import KNOWN_FOLDERS
 from core.tool_registry import RiskLevel, ToolParameter, registry
 
 DAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
-
-# Nombre que dice el usuario -> carpeta dentro del perfil de usuario.
-SPECIAL_FOLDERS = {
-    "escritorio": "Desktop", "desktop": "Desktop",
-    "documentos": "Documents", "documents": "Documents",
-    "descargas": "Downloads", "downloads": "Downloads",
-    "imagenes": "Pictures", "imágenes": "Pictures", "fotos": "Pictures", "pictures": "Pictures",
-    "musica": "Music", "música": "Music", "music": "Music",
-    "videos": "Videos", "vídeos": "Videos",
-}
 FOLDER_HELP = "escritorio, documentos, descargas, imágenes, música o videos"
 
 
@@ -56,7 +47,7 @@ def get_system_info() -> str:
     ],
 )
 def open_special_folder(folder: str) -> str:
-    target_name = SPECIAL_FOLDERS.get(folder.strip().lower())
+    target_name = KNOWN_FOLDERS.get(folder.strip().lower())
     if target_name is None:
         return f"No conozco la carpeta '{folder}'. Puedo abrir: {FOLDER_HELP}."
 

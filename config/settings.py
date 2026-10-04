@@ -20,6 +20,7 @@ class Settings:
     keep_alive: str = os.getenv("JARVIS_KEEP_ALIVE", "5m")
     num_ctx: int = int(os.getenv("JARVIS_NUM_CTX", "4096"))
     timeout: float = float(os.getenv("JARVIS_TIMEOUT", "120"))
+    default_dir: str = os.getenv("JARVIS_DEFAULT_DIR", "")
 
 
 settings = Settings()

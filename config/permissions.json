@@ -1,10 +1,15 @@
 {
   "tool_overrides": {},
+  "allowed_roots": [
+    "%USERPROFILE%"
+  ],
   "protected_paths": [
     "C:\\Windows",
     "C:\\Program Files",
     "C:\\Program Files (x86)",
-    "C:\\ProgramData"
+    "C:\\ProgramData",
+    "%USERPROFILE%\\AppData",
+    "%USERPROFILE%\\.ssh"
   ],
   "protected_processes": [
     "explorer", "winlogon", "csrss", "lsass", "services", "svchost",

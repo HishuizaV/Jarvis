@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import BASE_DIR
+from core.paths import resolve_user_path
 from core.tool_registry import RiskLevel, Tool
 
 logger = logging.getLogger(__name__)
@@ -52,11 +54,17 @@ def _normalize_process(name: str) -> str:
     return cleaned[:-4] if cleaned.endswith(".exe") else cleaned
 
 
+def _paths(values: list[str]) -> tuple[Path, ...]:
+    """Rutas del JSON: se expanden las variables (%USERPROFILE%) y se normalizan."""
+    return tuple(Path(os.path.expandvars(value)).resolve() for value in values)
+
+
 @dataclass(frozen=True)
 class PermissionPolicy:
     """Reglas de permisos. Solo pueden subir el riesgo, nunca bajarlo."""
 
     protected_paths: tuple[Path, ...] = ()
+    allowed_roots: tuple[Path, ...] = ()
     protected_processes: frozenset[str] = frozenset()
     blocked_commands: tuple[re.Pattern[str], ...] = ()
     confirm_commands: tuple[re.Pattern[str], ...] = ()
@@ -67,7 +75,8 @@ class PermissionPolicy:
         """Construye la política desde un diccionario (el contenido del JSON)."""
         try:
             return cls(
-                protected_paths=tuple(Path(p) for p in data.get("protected_paths", [])),
+                protected_paths=_paths(data.get("protected_paths", [])),
+                allowed_roots=_paths(data.get("allowed_roots", [])),
                 protected_processes=frozenset(
                     _normalize_process(p) for p in data.get("protected_processes", [])
                 ),
@@ -82,7 +91,7 @@ class PermissionPolicy:
                     for name, value in data.get("tool_overrides", {}).items()
                 },
             )
-        except (ValueError, TypeError, AttributeError, re.error) as exc:
+        except (ValueError, TypeError, AttributeError, OSError, re.error) as exc:
             raise PermissionConfigError(f"Configuración de permisos inválida: {exc}") from exc
 
     def check(
@@ -129,8 +138,8 @@ class PermissionPolicy:
         for name, value in arguments.items():
             if not isinstance(value, str):
                 continue
-            if name in PATH_ARGUMENTS and self._is_protected_path(value):
-                yield RiskLevel.CONFIRMATION_REQUIRED, f"el argumento '{name}' apunta a una ruta protegida"
+            if name in PATH_ARGUMENTS:
+                yield from self._path_findings(name, value)
             if name in PROCESS_ARGUMENTS and _normalize_process(value) in self.protected_processes:
                 yield RiskLevel.CONFIRMATION_REQUIRED, f"'{value}' es un proceso protegido"
             if name in COMMAND_ARGUMENTS:
@@ -139,13 +148,20 @@ class PermissionPolicy:
                 if any(pattern.search(value) for pattern in self.confirm_commands):
                     yield RiskLevel.CONFIRMATION_REQUIRED, "el comando coincide con un patrón que requiere confirmación"
 
-    def _is_protected_path(self, value: str) -> bool:
-        """True si la ruta (ya normalizada: '..', mayúsculas) cae dentro de una ruta protegida."""
+    def _path_findings(self, name: str, value: str) -> Iterator[tuple[RiskLevel, str]]:
+        """Evalúa una ruta tal como la interpretan las herramientas (core.paths)."""
         try:
-            candidate = Path(value).expanduser().resolve()
-        except (OSError, ValueError, RuntimeError):
-            return True  # si no se puede analizar, se trata como protegida
-        return any(candidate.is_relative_to(protected) for protected in self.protected_paths)
+            candidate = resolve_user_path(value)
+        except ValueError:
+            yield RiskLevel.CONFIRMATION_REQUIRED, f"no se pudo interpretar la ruta del argumento '{name}'"
+            return
+
+        if any(candidate.is_relative_to(protected) for protected in self.protected_paths):
+            yield RiskLevel.CONFIRMATION_REQUIRED, f"el argumento '{name}' apunta a una ruta protegida"
+        elif self.allowed_roots and not any(
+            candidate.is_relative_to(root) for root in self.allowed_roots
+        ):
+            yield RiskLevel.CONFIRMATION_REQUIRED, f"el argumento '{name}' está fuera de tus carpetas permitidas"
 
 
 def load_policy(path: Path = PERMISSIONS_FILE) -> PermissionPolicy:

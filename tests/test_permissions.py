@@ -8,6 +8,8 @@ from core.permissions import (
     load_policy,
 )
 from core.tool_registry import RiskLevel, Tool
+from pathlib import Path
+from core import paths
 
 
 def make_tool(name: str = "tool", risk: RiskLevel = RiskLevel.SAFE) -> Tool:
@@ -103,3 +105,31 @@ def test_load_policy_lee_el_archivo_real():
 def test_load_policy_archivo_inexistente(tmp_path):
     with pytest.raises(PermissionConfigError):
         load_policy(tmp_path / "no_existe.json")
+
+def test_rutas_fuera_de_las_carpetas_permitidas_piden_confirmacion(tmp_path):
+    policy = PermissionPolicy.from_dict({"allowed_roots": [str(tmp_path)]})
+    assert policy.check(make_tool(), {"path": str(tmp_path / "a.txt")}).allowed
+    outside = tmp_path.parent / "otra" / "a.txt"
+    assert policy.check(make_tool(), {"path": str(outside)}).needs_confirmation
+
+
+def test_las_variables_de_entorno_se_expanden_en_las_rutas_protegidas(tmp_path, monkeypatch):
+    monkeypatch.setenv("JARVIS_TEST_DIR", str(tmp_path))
+    policy = PermissionPolicy.from_dict({"protected_paths": ["%JARVIS_TEST_DIR%\\secreto"]})
+    secret = tmp_path / "secreto" / "a.txt"
+    assert policy.check(make_tool(), {"path": str(secret)}).needs_confirmation
+
+
+def test_las_rutas_relativas_se_evaluan_como_las_resuelven_las_herramientas(tmp_path, monkeypatch):
+    monkeypatch.setattr(paths, "default_dir", lambda: tmp_path)
+    policy = PermissionPolicy.from_dict({"protected_paths": [str(tmp_path / "secreto")]})
+    assert policy.check(make_tool(), {"path": "secreto/a.txt"}).needs_confirmation
+    assert policy.check(make_tool(), {"path": "libre/a.txt"}).allowed
+
+
+def test_el_archivo_real_protege_appdata_y_lo_que_esta_fuera_del_usuario():
+    policy = load_policy(PERMISSIONS_FILE)
+    home = Path.home()
+    assert policy.check(make_tool(), {"path": str(home / "AppData" / "x")}).needs_confirmation
+    assert policy.check(make_tool(), {"path": "C:\\Temp\\x.txt"}).needs_confirmation
+    assert policy.check(make_tool(), {"path": str(home / "Documents" / "x.txt")}).allowed
