@@ -18,6 +18,7 @@ PYTHON_TYPES: dict[str, type | tuple[type, ...]] = {
 
 GROUP_FILES = "files"  # herramientas de archivos y carpetas
 
+GROUP_MONITOR = "monitor"  # estado del equipo: CPU, RAM, GPU, procesos
 
 class RiskLevel(str, Enum):
     """Nivel de riesgo de una herramienta."""

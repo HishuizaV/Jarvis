@@ -9,7 +9,9 @@ from datetime import datetime
 from pathlib import Path
 
 from core.paths import KNOWN_FOLDERS
-from core.tool_registry import RiskLevel, ToolParameter, registry
+from core.tool_registry import GROUP_MONITOR, RiskLevel, ToolParameter, registry
+from services.process_manager import format_processes, normalize_sort, top_processes
+from services.system_monitor import format_snapshot, normalize_part, take_snapshot
 
 DAYS = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
 FOLDER_HELP = "escritorio, documentos, descargas, imágenes, música o videos"
@@ -67,3 +69,45 @@ def open_special_folder(folder: str) -> str:
 def lock_screen() -> str:
     subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"], check=True)
     return "Bloqueando la sesión."
+
+@registry.register(
+    name="system_status",
+    description=(
+        "Muestra el estado actual del equipo: uso de CPU, RAM, GPU y VRAM, disco y batería. "
+        "Úsala para '¿cuánta RAM estoy usando?', '¿cómo está mi GPU?' o '¿cuánta batería me queda?'."
+    ),
+    risk=RiskLevel.SAFE,
+    group=GROUP_MONITOR,
+    parameters=[
+        ToolParameter(
+            "part",
+            "string",
+            "Qué mostrar: cpu, ram, gpu, disco o bateria. Si se omite, muestra todo",
+            required=False,
+        )
+    ],
+)
+def system_status(part: str = "all") -> str:
+    return format_snapshot(take_snapshot(), normalize_part(part))
+
+
+@registry.register(
+    name="process_list",
+    description=(
+        "Lista los programas (procesos) que más memoria o CPU consumen ahora mismo. "
+        "Úsala para '¿qué está consumiendo más memoria?' o '¿qué usa más CPU?'."
+    ),
+    risk=RiskLevel.SAFE,
+    group=GROUP_MONITOR,
+    parameters=[
+        ToolParameter(
+            "sort_by",
+            "string",
+            "Ordenar por 'memoria' o 'cpu'. Si se omite, ordena por memoria",
+            required=False,
+        )
+    ],
+)
+def process_list(sort_by: str = "memory") -> str:
+    by = normalize_sort(sort_by)
+    return format_processes(top_processes(by), by)

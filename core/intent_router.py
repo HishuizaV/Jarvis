@@ -8,7 +8,7 @@ from typing import Any
 
 from core.ollama_client import Message, OllamaClient
 from core.text_utils import normalize_text
-from core.tool_registry import GROUP_FILES, ToolError, ToolRegistry, registry
+from core.tool_registry import GROUP_FILES, GROUP_MONITOR, ToolError, ToolRegistry, registry
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,9 @@ TOOL_KEYWORDS = (
     "apaga", "apagar", "reinicia", "reiniciar", "recuerdame", "recordatorio",
     "avisame", "captura", "bloquea", "bloquear", "abierto", "abierta", "ejecutando",
     # consultas del sistema
-    "ram", "cpu", "gpu", "bateria", "memoria", "procesador", "procesos",
-    "hora", "fecha", "volumen", "disco", "consumiendo", "sistema",
+    "ram", "cpu", "gpu", "vram", "bateria", "memoria", "procesador", "procesos",
+    "hora", "fecha", "volumen", "disco", "consumiendo", "consume", "consumen",
+    "temperatura", "rendimiento", "estado", "sistema",
 )
 _TOOL_PATTERN = re.compile(r"\b(?:" + "|".join(TOOL_KEYWORDS) + r")\b")
 
@@ -71,6 +72,15 @@ def mentions_files(text: str) -> bool:
     """True si el mensaje habla de archivos o carpetas (o trae un nombre con extensión)."""
     return _FILES_PATTERN.search(normalize_text(text)) is not None
 
+# Consultas sobre el rendimiento del equipo (CPU, RAM, GPU, batería, procesos...).
+_MONITOR_PATTERN = re.compile(
+    r"\b(?:ram|cpu|gpu|vram|bateria|memoria|procesador|procesos|consumiendo|consume|consumen"
+    r"|disco|temperatura|rendimiento|estado)\b"
+)
+
+def mentions_monitor(text: str) -> bool:
+    """True si el mensaje pregunta por el rendimiento del equipo."""
+    return _MONITOR_PATTERN.search(normalize_text(text)) is not None
 
 def claims_action(reply: str) -> bool:
     """True si la respuesta dice que se hizo una acción ('Abrí...', 'He creado...')."""
@@ -133,10 +143,12 @@ class IntentRouter:
 
         tools: list[dict[str, Any]] = []
         if use_tools:
-            # Si habla de archivos, solo se ofrecen las herramientas de archivos:
-            # un modelo de 3B se confunde entre herramientas parecidas (open_app vs open_file).
+            # Se ofrecen solo las herramientas del tema del mensaje: un modelo de 3B
+            # se confunde entre herramientas parecidas (open_app vs open_file).
             if mentions_files(user_text):
                 tools = self._registry.to_ollama_tools(GROUP_FILES)
+            elif mentions_monitor(user_text):
+                tools = self._registry.to_ollama_tools(GROUP_MONITOR)
             tools = tools or self._registry.to_ollama_tools()
 
         message = self._client.chat(messages, tools=tools or None, temperature=0.0)

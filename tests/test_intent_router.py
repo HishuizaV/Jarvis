@@ -11,9 +11,10 @@ from core.intent_router import (
     claims_action,
     mentions_files,
     needs_tools,
+    mentions_monitor,
 )
 
-from core.tool_registry import GROUP_FILES, RiskLevel, ToolParameter, ToolRegistry
+from core.tool_registry import GROUP_FILES, GROUP_MONITOR, RiskLevel, ToolParameter, ToolRegistry
 
 class FakeClient:
     """Imita a OllamaClient: devuelve un mensaje fijo y recuerda cómo lo llamaron."""
@@ -115,6 +116,8 @@ def test_route_de_conversacion_si_envia_historial_y_ninguna_herramienta(reg):
         ("Bloquea la pantalla", True),
         ("¿Qué sistema operativo tengo?", True),
         ("¿Está Spotify abierto?", True),
+        ("¿Cuánta batería me queda?", True),
+        ("¿Cómo está el rendimiento de mi PC?", True),
     ],
 )
 def test_needs_tools(texto, esperado):
@@ -221,3 +224,42 @@ def test_en_conversacion_se_usa_el_prompt_que_dice_que_no_hay_acciones(reg):
     client = FakeClient({"role": "assistant", "content": "Hola"})
     IntentRouter(client, reg).route("hola")
     assert client.calls[0]["messages"][0] == {"role": "system", "content": CHAT_PROMPT}
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("¿Cuánta RAM estoy usando?", True),
+        ("¿Qué está consumiendo más memoria?", True),
+        ("¿Cómo está la batería?", True),
+        ("Abre Spotify", False),
+        ("¿Qué hora es?", False),
+        ("Hola, ¿cómo estás?", False),
+    ],
+)
+def test_mentions_monitor(texto, esperado):
+    assert mentions_monitor(texto) is esperado
+
+
+@pytest.fixture
+def reg3() -> ToolRegistry:
+    r = ToolRegistry()
+
+    @r.register(
+        name="system_status", description="Estado del equipo.", risk=RiskLevel.SAFE,
+        group=GROUP_MONITOR,
+    )
+    def system_status() -> str:
+        return "ok"
+
+    @r.register(name="get_current_time", description="Hora.", risk=RiskLevel.SAFE)
+    def get_current_time() -> str:
+        return "hora"
+
+    return r
+
+
+def test_si_pregunta_por_el_rendimiento_solo_se_ofrecen_las_de_monitor(reg3):
+    client = FakeClient({"role": "assistant", "content": ""})
+    IntentRouter(client, reg3).route("¿cuánta ram estoy usando?")
+    names = [tool["function"]["name"] for tool in client.calls[0]["tools"]]
+    assert names == ["system_status"]
