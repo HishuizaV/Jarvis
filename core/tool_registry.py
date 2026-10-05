@@ -16,6 +16,8 @@ PYTHON_TYPES: dict[str, type | tuple[type, ...]] = {
     "boolean": bool,
 }
 
+GROUP_FILES = "files"  # herramientas de archivos y carpetas
+
 
 class RiskLevel(str, Enum):
     """Nivel de riesgo de una herramienta."""
@@ -48,6 +50,7 @@ class Tool:
     risk: RiskLevel
     func: Callable[..., Any]
     parameters: tuple[ToolParameter, ...] = ()
+    group: str = ""
 
     def validate_arguments(self, arguments: dict[str, Any]) -> None:
         """Lanza ToolError si faltan argumentos, sobran o tienen el tipo incorrecto."""
@@ -108,13 +111,14 @@ class ToolRegistry:
         description: str,
         risk: RiskLevel,
         parameters: list[ToolParameter] | tuple[ToolParameter, ...] = (),
+        group: str = "",
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Decorador que registra una función como herramienta."""
 
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             if name in self._tools:
                 raise ToolError(f"Ya existe una herramienta llamada '{name}'")
-            self._tools[name] = Tool(name, description, risk, func, tuple(parameters))
+            self._tools[name] = Tool(name, description, risk, func, tuple(parameters), group)
             logger.debug("Herramienta registrada: %s (%s)", name, risk.value)
             return func
 
@@ -131,9 +135,13 @@ class ToolRegistry:
         """Todas las herramientas registradas."""
         return list(self._tools.values())
 
-    def to_ollama_tools(self) -> list[dict[str, Any]]:
-        """Esquemas para el modelo. Las herramientas BLOCKED no se le muestran."""
-        return [tool.to_ollama_schema() for tool in self._tools.values() if tool.risk is not RiskLevel.BLOCKED]
+    def to_ollama_tools(self, group: str | None = None) -> list[dict[str, Any]]:
+        """Esquemas para el modelo. Las BLOCKED no se muestran; con 'group', solo las de ese grupo."""
+        return [
+            tool.to_ollama_schema()
+            for tool in self._tools.values()
+            if tool.risk is not RiskLevel.BLOCKED and (group is None or tool.group == group)
+        ]
 
 
 registry = ToolRegistry()

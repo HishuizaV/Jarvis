@@ -6,6 +6,7 @@ import pytest
 
 from core.agent import Agent, parse_confirmation
 from core.intent_router import Intent, ToolCall
+from core.choices import Choices
 from core.ollama_client import OllamaError
 from core.permissions import PermissionPolicy
 from core.tool_registry import RiskLevel, ToolParameter, ToolRegistry
@@ -196,3 +197,72 @@ def test_registro_de_auditoria(env, caplog):
 )
 def test_parse_confirmation(texto, esperado):
     assert parse_confirmation(texto) is esperado
+
+CASA = "C:\\Users\\Holcen\\casa\\notas.txt"
+OFICINA = "C:\\Users\\Holcen\\oficina\\notas.txt"
+
+
+def make_choices_env(options: tuple[str, ...]):
+    opened: list[str] = []
+    reg = ToolRegistry()
+
+    @reg.register(name="find_things", description="Busca.", risk=RiskLevel.SAFE)
+    def find_things() -> str:
+        return Choices("1. casa\n2. oficina", tool="open_thing", argument="path", options=options)
+
+    @reg.register(
+        name="open_thing",
+        description="Abre.",
+        risk=RiskLevel.SAFE,
+        parameters=[ToolParameter("path", "string", "Ruta")],
+    )
+    def open_thing(path: str) -> str:
+        opened.append(path)
+        return f"abierto {path}"
+
+    return reg, opened
+
+
+def test_el_usuario_elige_por_orden_sin_pasar_por_el_modelo():
+    reg, opened = make_choices_env((CASA, OFICINA))
+    agent, router = make_agent(reg, tool_intent("find_things"))
+
+    assert "1. casa" in agent.handle("busca notas")
+    assert agent.handle("el segundo") == f"abierto {OFICINA}"
+    assert opened == [OFICINA]
+    assert len(router.calls) == 1
+
+
+def test_el_usuario_elige_por_una_palabra_de_la_ruta():
+    reg, opened = make_choices_env((CASA, OFICINA))
+    agent, _ = make_agent(reg, tool_intent("find_things"))
+
+    agent.handle("busca notas")
+    agent.handle("el de la oficina")
+
+    assert opened == [OFICINA]
+
+
+def test_la_eleccion_vale_solo_para_el_siguiente_mensaje():
+    reg, opened = make_choices_env((CASA, OFICINA))
+    agent, _ = make_agent(
+        reg, tool_intent("find_things"), Intent(reply="Hola"), Intent(reply="No sé")
+    )
+
+    agent.handle("busca notas")
+    assert agent.handle("hola") == "Hola"
+    assert agent.handle("el primero") == "No sé"
+    assert opened == []
+
+
+def test_la_opcion_elegida_pasa_por_los_permisos():
+    reg, opened = make_choices_env(("C:\\Windows\\notas.txt", OFICINA))
+    agent, _ = make_agent(
+        reg, tool_intent("find_things"), policy={"protected_paths": ["C:\\Windows"]}
+    )
+
+    agent.handle("busca notas")
+
+    assert "confirmación" in agent.handle("el primero")
+    assert agent.has_pending
+    assert opened == []

@@ -6,6 +6,7 @@ import pytest
 
 from core import paths
 from core.tool_registry import RiskLevel, registry
+from core.choices import Choices
 from tools import load_tools
 from tools.files import copy_file, create_folder, find_file, move_file, open_file, rename_file
 
@@ -192,3 +193,33 @@ def test_las_herramientas_de_archivos_estan_registradas_como_seguras():
     load_tools()
     for name in ("create_folder", "find_file", "open_file", "copy_file", "move_file", "rename_file"):
         assert registry.get(name).risk is RiskLevel.SAFE
+
+def test_open_file_encuentra_una_ruta_relativa_en_otra_carpeta_base(work, opened):
+    target = write(work.parent / "home" / "Documents" / "proy" / "notas.txt")
+    assert "Abriendo" in open_file("proy/notas.txt")
+    assert opened == [target.resolve()]
+
+
+def test_open_file_con_barra_inicial_abre_la_carpeta_conocida(work, opened):
+    downloads = work.parent / "home" / "Downloads"
+    downloads.mkdir(parents=True)
+    assert "Abriendo" in open_file("\\Descargas")
+    assert opened == [downloads.resolve()]
+
+
+def test_open_file_con_varias_coincidencias_devuelve_opciones_para_elegir(work, opened):
+    first = write(work / "a" / "notas.txt")
+    second = write(work / "b" / "notas.txt")
+
+    result = open_file("notas")
+
+    assert isinstance(result, Choices)
+    assert (result.tool, result.argument) == ("open_file", "path")
+    assert set(result.options) == {str(first), str(second)}
+
+
+def test_find_file_devuelve_opciones_para_abrir(work):
+    target = write(work / "docs" / "notas.txt")
+    result = find_file("notas")
+    assert isinstance(result, Choices)
+    assert result.options == (str(target),)

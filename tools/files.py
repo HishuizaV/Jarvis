@@ -19,9 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from core import paths
-from core.tool_registry import RiskLevel, ToolParameter, registry
+from core.choices import Choices
+from core.tool_registry import GROUP_FILES, RiskLevel, ToolParameter, registry
 
 logger = logging.getLogger(__name__)
+
+file_tool = functools.partial(registry.register, group=GROUP_FILES)
 
 RISKY_EXTENSIONS = frozenset({
     ".exe", ".bat", ".cmd", ".com", ".msi", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse",
@@ -57,8 +60,17 @@ def _friendly(func: Callable[..., str]) -> Callable[..., str]:
 
 
 def _resolve(text: str) -> Path:
+    """Ruta preferida (para crear cosas nuevas)."""
     try:
         return paths.resolve_user_path(text)
+    except ValueError as exc:
+        raise FileToolError(f"No entendí la ruta '{text}': {exc}.") from exc
+
+
+def _resolve_existing(text: str) -> Path:
+    """Para rutas que ya deberían existir: prueba cada carpeta base y elige donde exista."""
+    try:
+        return paths.resolve_existing(text)
     except ValueError as exc:
         raise FileToolError(f"No entendí la ruta '{text}': {exc}.") from exc
 
@@ -77,7 +89,7 @@ def _refuse_root(path: Path) -> None:
 
 def _destination(source: Path, destination_text: str) -> Path:
     """Calcula el destino de copiar o mover y verifica que sea seguro."""
-    target = _resolve(destination_text)
+    target = _resolve_existing(destination_text)
     wants_folder = destination_text.strip().endswith(("\\", "/"))
 
     if target.is_dir():
@@ -125,7 +137,18 @@ def _describe(path: Path) -> str:
     return f"{path}  [carpeta]" if path.is_dir() else str(path)
 
 
-@registry.register(
+def _choices_to_open(header: str, found: list[Path], footer: str) -> Choices:
+    """Lista numerada; el usuario puede elegir una en su siguiente mensaje."""
+    lines = [f"{index}. {_describe(path)}" for index, path in enumerate(found, start=1)]
+    return Choices(
+        "\n".join([header, *lines, footer]),
+        tool="open_file",
+        argument="path",
+        options=tuple(str(path) for path in found),
+    )
+
+
+@file_tool(
     name="create_folder",
     description="Crea una carpeta. Acepta una ruta completa o solo un nombre.",
     risk=RiskLevel.SAFE,
@@ -142,7 +165,7 @@ def create_folder(path: str) -> str:
     return f"Carpeta creada: {target}"
 
 
-@registry.register(
+@file_tool(
     name="find_file",
     description="Busca archivos o carpetas por nombre (basta con parte del nombre). No abre nada.",
     risk=RiskLevel.SAFE,
@@ -162,18 +185,21 @@ def find_file(name: str, folder: str = "") -> str:
     if not needle:
         raise FileToolError("Dime qué archivo quieres buscar.")
 
-    roots = [_resolve(folder)] if folder.strip() else _default_search_roots()
+    roots = [_resolve_existing(folder)] if folder.strip() else _default_search_roots()
     found, complete = _search(roots, needle)
     if not found:
         places = ", ".join(str(root) for root in roots)
         return f"No encontré '{name}' en {places}."
 
-    lines = [f"{index}. {_describe(path)}" for index, path in enumerate(found, start=1)]
-    note = "" if complete else "\n(Hay más resultados o la búsqueda se cortó: sé más específico.)"
-    return f"Encontré {len(found)} resultado(s):\n" + "\n".join(lines) + note
+    note = "" if complete else "(Hay más resultados o la búsqueda se cortó: sé más específico.)\n"
+    return _choices_to_open(
+        f"Encontré {len(found)} resultado(s):",
+        found,
+        note + "Dime cuál abro (por ejemplo: «el primero» o una palabra de su carpeta).",
+    )
 
 
-@registry.register(
+@file_tool(
     name="open_file",
     description=(
         "Abre un archivo o carpeta con su programa predeterminado. Acepta la ruta o solo el nombre. "
@@ -185,18 +211,18 @@ def find_file(name: str, folder: str = "") -> str:
 @_friendly
 def open_file(path: str) -> str:
     text = path.strip()
-    target = _resolve(text)
+    target = _resolve_existing(text)
 
     if not target.exists() and not re.search(r"[\\/]", text):
         matches, _ = _search(_default_search_roots(), text.casefold())
-        if len(matches) > 1:
-            options = "\n".join(f"  - {_describe(match)}" for match in matches)
-            return (
-                f"Encontré varios archivos para '{text}':\n{options}\n"
-                "Dime la ruta completa del que quieres abrir."
-            )
         if not matches:
             return f"No encontré '{text}'."
+        if len(matches) > 1:
+            return _choices_to_open(
+                f"Encontré varios archivos para '{text}':",
+                matches,
+                "Dime cuál quieres abrir (por ejemplo: «el segundo» o una palabra de su carpeta).",
+            )
         target = matches[0]
 
     _require_existing(target)
@@ -207,7 +233,7 @@ def open_file(path: str) -> str:
     return f"Abriendo {target}."
 
 
-@registry.register(
+@file_tool(
     name="copy_file",
     description=(
         "Copia un archivo o carpeta sin sobrescribir nada. "
@@ -221,7 +247,7 @@ def open_file(path: str) -> str:
 )
 @_friendly
 def copy_file(source: str, destination: str) -> str:
-    origin = _resolve(source)
+    origin = _resolve_existing(source)
     _require_existing(origin)
     _refuse_root(origin)
     target = _destination(origin, destination)
@@ -233,7 +259,7 @@ def copy_file(source: str, destination: str) -> str:
     return f"Copiado a {target}."
 
 
-@registry.register(
+@file_tool(
     name="move_file",
     description=(
         "Mueve un archivo o carpeta sin sobrescribir nada. "
@@ -247,7 +273,7 @@ def copy_file(source: str, destination: str) -> str:
 )
 @_friendly
 def move_file(source: str, destination: str) -> str:
-    origin = _resolve(source)
+    origin = _resolve_existing(source)
     _require_existing(origin)
     _refuse_root(origin)
     target = _destination(origin, destination)
@@ -256,7 +282,7 @@ def move_file(source: str, destination: str) -> str:
     return f"Movido a {target}."
 
 
-@registry.register(
+@file_tool(
     name="rename_file",
     description="Cambia el nombre de un archivo o carpeta, sin moverlo de lugar.",
     risk=RiskLevel.SAFE,
@@ -267,7 +293,7 @@ def move_file(source: str, destination: str) -> str:
 )
 @_friendly
 def rename_file(path: str, new_name: str) -> str:
-    origin = _resolve(path)
+    origin = _resolve_existing(path)
     _require_existing(origin)
     _refuse_root(origin)
 

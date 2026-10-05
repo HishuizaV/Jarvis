@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import BASE_DIR
-from core.paths import resolve_user_path
+from core.paths import candidate_paths
 from core.tool_registry import RiskLevel, Tool
 
 logger = logging.getLogger(__name__)
@@ -151,15 +151,21 @@ class PermissionPolicy:
     def _path_findings(self, name: str, value: str) -> Iterator[tuple[RiskLevel, str]]:
         """Evalúa una ruta tal como la interpretan las herramientas (core.paths)."""
         try:
-            candidate = resolve_user_path(value)
+            candidates = candidate_paths(value)
         except ValueError:
             yield RiskLevel.CONFIRMATION_REQUIRED, f"no se pudo interpretar la ruta del argumento '{name}'"
             return
 
-        if any(candidate.is_relative_to(protected) for protected in self.protected_paths):
+        # Una ruta relativa puede terminar en varias carpetas base: se evalúan TODAS.
+        if any(
+            candidate.is_relative_to(protected)
+            for candidate in candidates
+            for protected in self.protected_paths
+        ):
             yield RiskLevel.CONFIRMATION_REQUIRED, f"el argumento '{name}' apunta a una ruta protegida"
-        elif self.allowed_roots and not any(
-            candidate.is_relative_to(root) for root in self.allowed_roots
+        elif self.allowed_roots and any(
+            not any(candidate.is_relative_to(root) for root in self.allowed_roots)
+            for candidate in candidates
         ):
             yield RiskLevel.CONFIRMATION_REQUIRED, f"el argumento '{name}' está fuera de tus carpetas permitidas"
 

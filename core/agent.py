@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from config.logging_config import audit_logger, redact_arguments, redact_text
-from core.intent_router import IntentRouter, ToolCall, normalize_text
+from core.choices import Choices, pick_option
+from core.intent_router import IntentRouter, ToolCall
 from core.ollama_client import Message, OllamaError
 from core.permissions import PermissionPolicy, load_policy
+from core.text_utils import normalize_text
 from core.tool_registry import ToolError, ToolRegistry, registry
 
 logger = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ class Agent:
         self._policy = policy or load_policy()
         self._history: list[Message] = []
         self._pending: PendingAction | None = None
+        self._choices: Choices | None = None
 
     @property
     def has_pending(self) -> bool:
@@ -86,6 +89,14 @@ class Agent:
             if decision is False:
                 return "De acuerdo, acción cancelada."
             # No era una confirmación: se cancela lo pendiente y se atiende el mensaje nuevo.
+
+        if self._choices is not None:
+            # La elección vale para UN solo mensaje y se resuelve en código, sin el modelo.
+            choices, self._choices = self._choices, None
+            picked = pick_option(text, choices.options)
+            if picked is not None:
+                call = ToolCall(choices.tool, {choices.argument: picked})
+                return self._execute(text, call, confirmed=False)
 
         try:
             intent = self._router.route(text, self._history)
@@ -127,7 +138,7 @@ class Agent:
             return f"No puedo hacer eso: {verdict.reason}."
 
         try:
-            result = str(tool.run(call.arguments))
+            result = tool.run(call.arguments)
         except Exception as exc:  # noqa: BLE001 - frontera de la app: se registra y no la cierra
             logger.exception("La herramienta %s falló", call.name)
             self._audit(
@@ -135,9 +146,13 @@ class Agent:
             )
             return f"La herramienta '{call.name}' falló: {exc}"
 
+        if isinstance(result, Choices):
+            self._choices = result  # el próximo mensaje puede elegir una de sus opciones
+        answer = str(result)
+
         decision = "executed_confirmed" if confirmed else "executed"
-        self._audit(request, call, decision, result=result, started=started)
-        return result
+        self._audit(request, call, decision, result=answer, started=started)
+        return answer
 
     def _remember(self, user_text: str, answer: str) -> None:
         self._history.append({"role": "user", "content": user_text})

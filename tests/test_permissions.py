@@ -133,3 +133,11 @@ def test_el_archivo_real_protege_appdata_y_lo_que_esta_fuera_del_usuario():
     assert policy.check(make_tool(), {"path": str(home / "AppData" / "x")}).needs_confirmation
     assert policy.check(make_tool(), {"path": "C:\\Temp\\x.txt"}).needs_confirmation
     assert policy.check(make_tool(), {"path": str(home / "Documents" / "x.txt")}).allowed
+
+def test_las_rutas_relativas_se_evaluan_en_todas_las_carpetas_base(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setattr(paths, "default_dir", lambda: tmp_path / "base")
+    policy = PermissionPolicy.from_dict({"protected_paths": [str(home / "Documents" / "secreto")]})
+
+    assert policy.check(make_tool(), {"path": "secreto/a.txt"}).needs_confirmation

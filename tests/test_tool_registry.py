@@ -63,3 +63,11 @@ def test_esquema_ollama_oculta_las_bloqueadas(reg):
     names = [tool["function"]["name"] for tool in tools]
     assert names == ["create_folder", "set_volume"]
     assert tools[0]["function"]["parameters"]["required"] == ["name"]
+
+def test_to_ollama_tools_puede_filtrar_por_grupo():
+    r = ToolRegistry()
+    r.register(name="a", description="a", risk=RiskLevel.SAFE, group="files")(lambda: None)
+    r.register(name="b", description="b", risk=RiskLevel.SAFE)(lambda: None)
+
+    assert [tool["function"]["name"] for tool in r.to_ollama_tools("files")] == ["a"]
+    assert len(r.to_ollama_tools()) == 2
